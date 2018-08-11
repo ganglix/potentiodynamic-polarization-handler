@@ -1,4 +1,8 @@
-# version: V1.2 plot with notebook interactively, try pd.read_xlsx and csv
+# DOI 10.5281/zenodo.1342163
+# GNU General Public License 3.0
+# cite as
+# Li, Gang, & Li, Alice D.S. (2018, August 9). A customized Python module for interactive curve fitting on potentiodynamic scan data (Version v1.0.0). Zenodo. http://doi.org/10.5281/zenodo.1342163
+
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -12,16 +16,30 @@ import numpy as np
 from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score'''
 
-
-
-def BVeq(E,Eeq,i0,Ba,Bc): # Butler volmer
+# Helper functions
+# Butler-Volmer Equation
+def BVeq(E,Eeq,i0,Ba,Bc):
+    """
+    E: eletrode potential
+    Eeq: equilibrium potential
+    i0: exchange current density
+    Ba: Tafel slope, anodic
+    Bc: Tafel slope, cathodic
+    NOTE: B-V equation has the same mathmatic form when used in single and mixed
+    electrode process; however Eeq and i0 may have different terminology
+    """
     ia = i0*10**((E-Eeq)/Ba)
     ic = -i0*10**((E-Eeq)/Bc)
     inet = ia+ic
     return inet
 
-def Feq(E,Eeq,i0,Ba,Bc,Va,Vc): # Z.T. Chang etal 2008,
-
+# Empirical Film growth/dissolution Equation, after Z.T. Chang et al 2008,
+def Feq(E,Eeq,i0,Ba,Bc,Va,Vc):
+    """
+    Return net current density due to Film growth/dissolution
+    Va,Vc are empirical parameters, larger the value, less the
+    contribution of film change to total current in BVFeq.
+    """
     iF= (
         (E>=Eeq)*i0*(np.abs(E-Eeq)/Va*10**(-(E-Eeq)/Ba))**0.5 # Va>0
          +(E<Eeq)*-i0*(-np.abs(E-Eeq)/Vc*10**(-(E-Eeq)/Bc))**0.5 # Vc<0
@@ -30,12 +48,14 @@ def Feq(E,Eeq,i0,Ba,Bc,Va,Vc): # Z.T. Chang etal 2008,
     return iF
 
 def BVFeq(E,Eeq,i0,Ba,Bc,Va,Vc):
+    """combined rate of main B-V and Film growth/dissolution"""
     return BVeq(E,Eeq,i0,Ba,Bc)+Feq(E,Eeq,i0,Ba,Bc,Va,Vc)
 
 class Info:
     """
+    Info object: store and pre-process all raw current potential data and experiment settings
     filename:.xlsx or .csv
-    scantype: 'one_step' or 'two_step'
+    scantype: 'one_step' or 'two_step', default is 'one step'
     """
     def __init__(self,filename,scantype='one_step',area=1,two_step_drift_offset=True, pd_dfIE = None,use_pd_df=False):
         self.filename = filename
@@ -51,14 +71,14 @@ class Info:
             self.data = df
 
         else:
-            
+
             if self.filename.split('.')[-1]=='xlsx':
                 df = pd.read_excel(self.filename,skiprows=1)
             elif self.filename.split('.')[-1]=='csv':
                 df = pd.read_csv(self.filename,skiprows=1)
-            else: 
+            else:
                 print 'load data error'
-                
+
             if df.shape[1]==4:
                 self.scantype ='two_step'
             if self.scantype == 'one_step':
@@ -105,9 +125,7 @@ class Info:
 
 
 class Tafit:
-    """ Tafit: init obj
-        BV_fit: auto fit butler-volmer
-        BV_fit_interact: select curve portion and fit"""
+    """ datafiting object: Main object to store, process, fit, plot, data and results"""
     def __init__(self, info):
         #input attributes
         self.info = info
@@ -123,10 +141,10 @@ class Tafit:
         self.B = None
         self.Rp = None
         self.icorr_LPR = None
-        # init figure
+        # initilize figure
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(1, 1, 1)
-        # plot data
+        # plot empty data, create line objects
         self.line_data_sel, = self.ax.plot([],[],'C0.',markersize=3,label='selceted data')
         self.line__data_dis1, = self.ax.plot([],[],'C1.',markersize=3,label='disgarded data')
         self.line__data_dis2, = self.ax.plot([],[],'C1.',markersize=3)
@@ -135,7 +153,7 @@ class Tafit:
         # fitted BV equation
         self.line_bv, = self.ax.plot([],[],'-r',label='B_V fit')
         self.line_bvf, = self.ax.plot([],[],'-r',label='B_V_F fit')
-    # tangent line
+        # tangent line
         self.line_tan1, = self.ax.plot([],[],'--r',alpha=0.5)
         self.line_tan2, = self.ax.plot([],[],'--r',alpha=0.5)
 
@@ -143,6 +161,9 @@ class Tafit:
         return self.result
 
     def BV_LPR_manual(self,data_range,df_IE,fname = '',taf_init=200,R=0, auto_zoom=True,grid_on=True,logx=True):
+        """
+        Helper function: mask data, initial guess, fit Butler_Volmer equation, output results
+        """
         # mask data
         start=data_range[0]
         stop = data_range[1]
@@ -150,30 +171,26 @@ class Tafit:
         self.R = R
 
         I = df_IE.i_density.values
-        E = df_IE.E.values - I*self.area*self.R  # IR compensation
-
+        E = df_IE.E.values - I*self.area*self.R  # Post IR compensation
 
         I_select = I[start:stop]
         E_select = E[start:stop]
 
-        # name change in favour of legacy
-        iext = I_select
-        iext_abs = np.abs(iext)
-        E_rebar = E_select
+        I_select_abs = np.abs(I_select)
         ind_min = np.where(np.abs(I_select)==np.abs(I_select).min())[0][0]
         OCP = E_select[ind_min]  # open circuit potential
 
         ############## start of guess parameters from scan#############
         # anodic
-        iext_a = iext[iext>0]
-        E_rebar_a = E_rebar[iext>0]
+        I_select_a = I_select[I_select>0]
+        E_select_a = E_select[I_select>0]
 
-        Ba_scan,intercept_a = np.polyfit(np.log10(iext_a)[-taf_init:-1], E_rebar_a[-taf_init:-1], 1) # quick fit slope
+        Ba_scan,intercept_a = np.polyfit(np.log10(I_select_a)[-taf_init:-1], E_select_a[-taf_init:-1], 1) # quick fit slope
 
         # cathodic
-        iext_c = np.abs(iext[iext<0])
-        E_rebar_c = E_rebar[iext<0]
-        Bc_scan,intercept_c = np.polyfit(np.log10(iext_c)[0:taf_init], E_rebar_c[0:taf_init], 1) # quick fit slope
+        I_select_c = np.abs(I_select[I_select<0])
+        E_select_c = E_select[I_select<0]
+        Bc_scan,intercept_c = np.polyfit(np.log10(I_select_c)[0:taf_init], E_select_c[0:taf_init], 1) # quick fit slope
 
         icorr = 10**(-(intercept_a - intercept_c)*1.0/(Ba_scan-Bc_scan))
 
@@ -185,7 +202,7 @@ class Tafit:
 
         p_guess = [OCP,icorr,Ba_scan,Bc_scan]
 
-        popt, pcov = curve_fit(BVeq,E_rebar, iext, p_guess, bounds=bound) # popt is optimal parameter array
+        popt, pcov = curve_fit(BVeq,E_select, I_select, p_guess, bounds=bound) # popt is optimal parameter array
         ############## end of Fitting parameters from scan#############
 
         # out put
@@ -198,7 +215,6 @@ class Tafit:
         self.B = self.Ba*abs(self.Bc)/(2.303*(self.Ba+abs(self.Bc)))
 
         # create figure frame
-        #fig,ax = plt.subplots(figsize=(8,6))
         # plot fit
         _ = np.linspace(E.min(),E.max(),1000) # spaced temporary E for plotting
 
@@ -226,7 +242,7 @@ class Tafit:
 
 
         plt.xlabel('Averaged logi [$A/m^2$]')
-        plt.ylabel('E_rebar [V]')
+        plt.ylabel('E_select [V]')
         plt.title(str(fname))
         plt.legend(loc='best')
 
@@ -235,9 +251,9 @@ class Tafit:
 
         if auto_zoom:
             if logx:
-                plt.xlim(0.1*iext_abs.min(),10*iext_abs.max())
+                plt.xlim(0.1*I_select_abs.min(),10*I_select_abs.max())
             else:
-                plt.xlim(1.1*iext.min(),1.1*iext.max())
+                plt.xlim(1.1*I_select.min(),1.1*I_select.max())
             #plt.ylim(E_select.min()*1.05,E_select.max()*1.05)
         self.ax.grid(grid_on,which='both')
         #self.fig.show()
@@ -283,6 +299,10 @@ class Tafit:
 
 
     def BV_LPR_interact(self, anodic_range=0.15,cathodic_range=0.15):
+        """
+        interact method of BV_LPR_manual
+        anodic/cathodic range vs open circuit, default initial value +-0.15 V
+        """
         import ipywidgets as widgets
         layout = widgets.Layout(width = '500px',height='40px')
         df_IE = self.data
@@ -293,7 +313,7 @@ class Tafit:
         start = (np.abs(self.info.data['E'].values - (start_val))).argmin()
         end = (np.abs(self.info.data['E'].values - (end_val))).argmin()
         #remove unused line
-        try: 
+        try:
             self.line_bvf.remove()
         except:
             pass
@@ -310,7 +330,9 @@ class Tafit:
                          )
 
     def BVF_LPR_manual(self,data_range,df_IE,fname = '',taf_init=200,R=0, auto_zoom=True,grid_on=True,logx=True):
-        # mask data
+        """
+        Helper function: mask data, initial guess, fit "BVFeq"(Butler_Volmer + Film growth/dissolution), output results
+        """
         start=data_range[0]
         stop = data_range[1]
 
@@ -323,24 +345,21 @@ class Tafit:
         I_select = I[start:stop]
         E_select = E[start:stop]
 
-        # name change in favour of legacy
-        iext = I_select
-        iext_abs = np.abs(iext)
-        E_rebar = E_select
+        I_select_abs = np.abs(I_select)
         ind_min = np.where(np.abs(I_select)==np.abs(I_select).min())[0][0]
         OCP = E_select[ind_min]  # open circuit potential
 
         ############## start of guess parameters from scan#############
         # anodic
-        iext_a = iext[iext>0]
-        E_rebar_a = E_rebar[iext>0]
+        I_select_a = I_select[I_select>0]
+        E_select_a = E_select[I_select>0]
 
-        Ba_scan,intercept_a = np.polyfit(np.log10(iext_a)[-taf_init:-1], E_rebar_a[-taf_init:-1], 1) # quick fit slope
+        Ba_scan,intercept_a = np.polyfit(np.log10(I_select_a)[-taf_init:-1], E_select_a[-taf_init:-1], 1) # quick fit slope
 
         # cathodic
-        iext_c = np.abs(iext[iext<0])
-        E_rebar_c = E_rebar[iext<0]
-        Bc_scan,intercept_c = np.polyfit(np.log10(iext_c)[0:taf_init], E_rebar_c[0:taf_init], 1) # quick fit slope
+        I_select_c = np.abs(I_select[I_select<0])
+        E_select_c = E_select[I_select<0]
+        Bc_scan,intercept_c = np.polyfit(np.log10(I_select_c)[0:taf_init], E_select_c[0:taf_init], 1) # quick fit slope
 
         icorr = 10**(-(intercept_a - intercept_c)*1.0/(Ba_scan-Bc_scan))
 
@@ -356,7 +375,7 @@ class Tafit:
 
         p_guess = [OCP,icorr,Ba_scan,Bc_scan,Va_guess,Vc_guess]
 
-        popt, pcov = curve_fit(BVFeq,E_rebar, iext, p_guess, bounds=bound) # popt is optimal parameter array
+        popt, pcov = curve_fit(BVFeq,E_select, I_select, p_guess, bounds=bound) # popt is optimal parameter array
         ############## end of Fitting parameters from scan#############
 
         # out put
@@ -372,7 +391,6 @@ class Tafit:
         self.B = self.Ba*abs(self.Bc)/(2.303*(self.Ba+abs(self.Bc)))
 
         # create figure frame
-        #fig,ax = plt.subplots(figsize=(8,6))
         # plot fit
         _ = np.linspace(E.min(),E.max(),1000) # spaced temporary E for plotting
 
@@ -395,7 +413,7 @@ class Tafit:
             self.line__data_dis2.set_data((I[stop:-1]),E[stop:-1]) #disgarded data
             self.line_guess.set_data((BVFeq(_,*p_guess)),_) #Initial Guess
             #self.line_bv.set_data((BVeq(_,*popt[0:4])),_)#BV Fitted from observation
-            self.line_bvf.set_data((BVFeq(_,*popt)),_)#BVF Fitted from observation            self.ax.set_xscale('linear')
+            self.line_bvf.set_data((BVFeq(_,*popt)),_)#BVF Fitted from observation
             self.ax.set_xscale('linear')
 
 #             self.line_tan1.set_data([],[])
@@ -403,7 +421,7 @@ class Tafit:
 
 
         plt.xlabel('Averaged logi [$A/m^2$]')
-        plt.ylabel('E_rebar [V]')
+        plt.ylabel('E_select [V]')
         plt.title(str(fname))
         plt.legend(loc='best')
 
@@ -412,9 +430,9 @@ class Tafit:
 
         if auto_zoom:
             if logx:
-                plt.xlim(0.1*iext_abs.min(),10*iext_abs.max())
+                plt.xlim(0.1*I_select_abs.min(),10*I_select_abs.max())
             else:
-                plt.xlim(1.1*iext.min(),1.1*iext.max())
+                plt.xlim(1.1*I_select.min(),1.1*I_select.max())
             #plt.ylim(E_select.min()*1.05,E_select.max()*1.05)
         self.ax.grid(grid_on,which='both')
         #self.fig.show()
@@ -459,6 +477,7 @@ class Tafit:
 
 
     def BVF_LPR_interact(self, anodic_range=0.15,cathodic_range=0.15):
+        """Interactive method of BVFeq"""
         import ipywidgets as widgets
         layout = widgets.Layout(width = '500px',height='40px')
         df_IE = self.data
@@ -485,14 +504,16 @@ class Tafit:
                          logx = widgets.Checkbox(value=True,description='logx',disabled=False)
                          )
 
+    # other helper method
     def remove_outlier(self,roughness=10):
+        """remove large fast current occilation """
         try:
             out_lier_idx=(self.data.index[0:-1][np.abs(np.diff(self.data['i_density']))
                    > roughness *np.abs(np.mean(np.diff(self.data['i_density'])))])
             self.data.iloc[self.data.iloc[out_lier_idx].index]=np.nan
             self.data.dropna(axis='index',inplace=True)
         except:
-            print 'Outlier removal Failed!'
+            print 'Outlier removal not qualified!'
         return self
 
     def remove_outlier_manual(self,data_range):
@@ -509,6 +530,7 @@ class Tafit:
                          )
 
     def plot_BV_F_components(self, logx=True):
+        """plot B-V and Film components"""
         if logx:
             plt.plot(BVFeq(self.data.E,*self.result.values[0:6]).abs(),
                      self.data.E,
@@ -541,16 +563,20 @@ class Tafit:
 
         plt.legend()
 
-def plot_compare(fobjs,offset_drift=True,logx=True,absolute_value = True, inplace = False):
-    '''Info object: fobjs = [Info('filename.xlsx')...]'''
+# Additional postprocess functions
+def plot_compare(info_obj_list,offset_drift=True,logx=True,absolute_value = True, inplace = False):
+    '''
+    Compare multiple scan curves. option: force offset Ecorr drift.
+    Info object: info_obj_list = [Info('filename.xlsx')...]'''
+
     if offset_drift:
-        Ecorrs = np.array([this_obj.get_quick_Ecorr() for this_obj in fobjs])
+        Ecorrs = np.array([this_obj.get_quick_Ecorr() for this_obj in info_obj_list])
         drifts = Ecorrs-Ecorrs[0]
     else:
-        drifts = np.zeros(len(fobjs))
+        drifts = np.zeros(len(info_obj_list))
 
     fig, this_ax = plt.subplots()
-    for this_obj,this_drift in zip(fobjs, drifts):
+    for this_obj,this_drift in zip(info_obj_list, drifts):
 
         #df_modifed = this_obj.get_data().
         this_obj.get_data().E=this_obj.get_data().E - this_drift
@@ -565,5 +591,10 @@ def plot_compare(fobjs,offset_drift=True,logx=True,absolute_value = True, inplac
     plt.show()
     if inplace == False:
         # reverse the drifts
-        for this_obj,this_drift in zip(fobjs, drifts):
+        for this_obj,this_drift in zip(info_obj_list, drifts):
             this_obj.get_data().E=this_obj.get_data().E + this_drift
+
+
+# developer
+def Check_validation():
+    pass
