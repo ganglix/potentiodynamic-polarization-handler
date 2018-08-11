@@ -25,7 +25,7 @@ def BVeq(E,Eeq,i0,Ba,Bc):
     i0: exchange current density
     Ba: Tafel slope, anodic
     Bc: Tafel slope, cathodic
-    NOTE: B-V equation has the same mathmatic form when used in single and mixed
+    NOTE: B-V equation has the same mathematic form when used in single and mixed
     electrode process; however Eeq and i0 may have different terminology
     """
     ia = i0*10**((E-Eeq)/Ba)
@@ -57,13 +57,13 @@ class Info:
     filename:.xlsx or .csv
     scantype: 'one_step' or 'two_step', default is 'one step'
     """
-    def __init__(self,filename,scantype='one_step',area=1,two_step_drift_offset=True, pd_dfIE = None,use_pd_df=False):
+    def __init__(self,filename,scantype='one_step',two_step_drift_offset=True, pd_dfIE = None,use_pd_df=False,area=1):
         self.filename = filename
         self.scantype = scantype
         self.area = area
 
         if use_pd_df:
-            df = pd_dfIE
+            df = pd_dfIE.copy()
             df.columns = ['I','E']
             df['i_density']=df['I']/self.area
             df['i_density_abs'] = df.i_density.abs()
@@ -134,13 +134,13 @@ class Tafit:
 
         #output attributes can be added dynamically
         self.Ecorr = None
-        self.icorr = None
+        self.Icorr = None
         self.Ba = None
         self.Bc = None
 
         self.B = None
         self.Rp = None
-        self.icorr_LPR = None
+        self.Icorr_LPR = None
         # initilize figure
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(1, 1, 1)
@@ -192,24 +192,24 @@ class Tafit:
         E_select_c = E_select[I_select<0]
         Bc_scan,intercept_c = np.polyfit(np.log10(I_select_c)[0:taf_init], E_select_c[0:taf_init], 1) # quick fit slope
 
-        icorr = 10**(-(intercept_a - intercept_c)*1.0/(Ba_scan-Bc_scan))
+        Icorr = 10**(-(intercept_a - intercept_c)*1.0/(Ba_scan-Bc_scan))
 
         ############## end of guess parameters from scan###############
 
         # bound based on guess
-        bound = ([OCP-0.001,icorr*0.01,Ba_scan-0.20,Bc_scan-0.20],
-                 [OCP+0.001,icorr*100.0,Ba_scan+0.20,Bc_scan+0.20])
+        bound = ([OCP-0.001,Icorr*0.01,Ba_scan-0.20,Bc_scan-0.20],
+                 [OCP+0.001,Icorr*100.0,Ba_scan+0.20,Bc_scan+0.20])
 
-        p_guess = [OCP,icorr,Ba_scan,Bc_scan]
+        p_guess = [OCP,Icorr,Ba_scan,Bc_scan]
 
         popt, pcov = curve_fit(BVeq,E_select, I_select, p_guess, bounds=bound) # popt is optimal parameter array
         ############## end of Fitting parameters from scan#############
 
         # out put
-        taf_series = pd.Series(popt ,index=['Ecorr','icorr','Ba','Bc'])
+        taf_series = pd.Series(popt ,index=['Ecorr','Icorr','Ba','Bc'])
 
         self.Ecorr = taf_series.Ecorr
-        self.icorr = taf_series.icorr
+        self.Icorr = taf_series.Icorr
         self.Ba = taf_series.Ba
         self.Bc = taf_series.Bc
         self.B = self.Ba*abs(self.Bc)/(2.303*(self.Ba+abs(self.Bc)))
@@ -222,18 +222,18 @@ class Tafit:
             self.line_data_sel.set_data(np.abs(I_select),E_select)       #selceted data
             self.line__data_dis1.set_data(np.abs(I[0:start]),E[0:start]) #disgarded data
             self.line__data_dis2.set_data(np.abs(I[stop:-1]),E[stop:-1]) #disgarded data
-            self.line_guess.set_data(np.abs(BVeq(_,OCP,icorr,Ba_scan,Bc_scan)),_) #Initial Guess
+            self.line_guess.set_data(np.abs(BVeq(_,OCP,Icorr,Ba_scan,Bc_scan)),_) #Initial Guess
             self.line_bv.set_data(np.abs(BVeq(_,*popt)),_)#Fitted from observation
             self.ax.semilogx()
 
-            self.line_tan1.set_data(self.icorr*10**((_-self.Ecorr)/self.Ba),_) # tangent line
-            self.line_tan2.set_data(self.icorr*10**((_-self.Ecorr)/self.Bc),_)
+            self.line_tan1.set_data(self.Icorr*10**((_-self.Ecorr)/self.Ba),_) # tangent line
+            self.line_tan2.set_data(self.Icorr*10**((_-self.Ecorr)/self.Bc),_)
 
         else:
             self.line_data_sel.set_data((I_select),E_select)       #selceted data
             self.line__data_dis1.set_data((I[0:start]),E[0:start]) #disgarded data
             self.line__data_dis2.set_data((I[stop:-1]),E[stop:-1]) #disgarded data
-            self.line_guess.set_data((BVeq(_,OCP,icorr,Ba_scan,Bc_scan)),_) #Initial Guess
+            self.line_guess.set_data((BVeq(_,OCP,Icorr,Ba_scan,Bc_scan)),_) #Initial Guess
             self.line_bv.set_data((BVeq(_,*popt)),_)#Fitted from observation
             self.ax.set_xscale('linear')
 
@@ -241,7 +241,7 @@ class Tafit:
             self.line_tan2.set_data([],[])
 
 
-        plt.xlabel('Averaged logi [$A/m^2$]')
+        plt.xlabel('I_select [A]')
         plt.ylabel('E_select [V]')
         plt.title(str(fname))
         plt.legend(loc='best')
@@ -267,7 +267,7 @@ class Tafit:
                )
 
         print '\r'
-        print 'Unit:V, A/m^2\n',taf_series
+        print 'Unit:V, A\n',taf_series
         print 'guess', p_guess
         print 'bound', bound
 
@@ -280,8 +280,8 @@ class Tafit:
         Rp1,_ = np.polyfit(df_LPR1.I,df_LPR1.E, 1) # quick fit slope
         Rp2,_ = np.polyfit(df_LPR2.I,df_LPR2.E, 1) # quick fit slope
         self.Rp = np.mean([Rp1, Rp2])
-        self.icorr_LPR = self.B/self.Rp/self.area
-        LPR_series = pd.Series([self.B, self.Rp, self.icorr_LPR] ,index=['B','Rp','icorr_LPR'])
+        self.Icorr_LPR = self.B/self.Rp/self.area
+        LPR_series = pd.Series([self.B, self.Rp, self.Icorr_LPR] ,index=['B','Rp','Icorr_LPR'])
 
         if False:
             fig1,ax1 = plt.subplots(figsize=(8,6))
@@ -292,7 +292,7 @@ class Tafit:
             ax1.set_ylabel('E(V)')
             plt.show()
 
-        print 'Unit:V, Ohm, A/m^2'
+        print 'Unit:V, Ohm, A'
         print LPR_series
         self.result = taf_series.append(LPR_series)
         return self
@@ -361,7 +361,7 @@ class Tafit:
         E_select_c = E_select[I_select<0]
         Bc_scan,intercept_c = np.polyfit(np.log10(I_select_c)[0:taf_init], E_select_c[0:taf_init], 1) # quick fit slope
 
-        icorr = 10**(-(intercept_a - intercept_c)*1.0/(Ba_scan-Bc_scan))
+        Icorr = 10**(-(intercept_a - intercept_c)*1.0/(Ba_scan-Bc_scan))
 
         Va_guess = 1000.0 # Va>0
         Vc_guess = -1000.0 # Vc<0
@@ -370,19 +370,19 @@ class Tafit:
 
         # bound based on guess
 
-        bound = ([OCP-0.001,icorr*0.01,Ba_scan-0.20,Bc_scan-0.20,0.0001,Vc_guess],
-                 [OCP+0.001,icorr*100.0,Ba_scan+0.20,Bc_scan+0.20,Va_guess,-0.0001])
+        bound = ([OCP-0.001,Icorr*0.01,Ba_scan-0.20,Bc_scan-0.20,0.0001,Vc_guess],
+                 [OCP+0.001,Icorr*100.0,Ba_scan+0.20,Bc_scan+0.20,Va_guess,-0.0001])
 
-        p_guess = [OCP,icorr,Ba_scan,Bc_scan,Va_guess,Vc_guess]
+        p_guess = [OCP,Icorr,Ba_scan,Bc_scan,Va_guess,Vc_guess]
 
         popt, pcov = curve_fit(BVFeq,E_select, I_select, p_guess, bounds=bound) # popt is optimal parameter array
         ############## end of Fitting parameters from scan#############
 
         # out put
-        taf_series = pd.Series(popt ,index=['Ecorr','icorr','Ba','Bc','Va','Vc'])
+        taf_series = pd.Series(popt ,index=['Ecorr','Icorr','Ba','Bc','Va','Vc'])
 
         self.Ecorr = taf_series.Ecorr
-        self.icorr = taf_series.icorr
+        self.Icorr = taf_series.Icorr
         self.Ba = taf_series.Ba
         self.Bc = taf_series.Bc
         self.Va = taf_series.Va
@@ -404,8 +404,8 @@ class Tafit:
             self.line_bvf.set_data(np.abs(BVFeq(_,*popt)),_)#BVF Fitted from observation
             self.ax.semilogx()
 
-#             self.line_tan1.set_data(self.icorr*10**((_-self.Ecorr)/self.Ba),_)
-#             self.line_tan2.set_data(self.icorr*10**((_-self.Ecorr)/self.Bc),_)
+#             self.line_tan1.set_data(self.Icorr*10**((_-self.Ecorr)/self.Ba),_)
+#             self.line_tan2.set_data(self.Icorr*10**((_-self.Ecorr)/self.Bc),_)
 
         else:
             self.line_data_sel.set_data((I_select),E_select)       #selceted data
@@ -420,7 +420,7 @@ class Tafit:
 #             self.line_tan2.set_data([],[])
 
 
-        plt.xlabel('Averaged logi [$A/m^2$]')
+        plt.xlabel('I_select [A]')
         plt.ylabel('E_select [V]')
         plt.title(str(fname))
         plt.legend(loc='best')
@@ -446,7 +446,7 @@ class Tafit:
                )
 
         print '\r'
-        print 'Unit:V, A/m^2\n',taf_series
+        print 'Unit:V, A\n',taf_series
         print 'guess', p_guess
         print 'bound', bound
 
@@ -458,8 +458,8 @@ class Tafit:
         Rp1,_ = np.polyfit(df_LPR1.I,df_LPR1.E, 1) # quick fit slope
         Rp2,_ = np.polyfit(df_LPR2.I,df_LPR2.E, 1) # quick fit slope
         self.Rp = np.mean([Rp1, Rp2])
-        self.icorr_LPR = self.B/self.Rp/self.area
-        LPR_series = pd.Series([self.B, self.Rp, self.icorr_LPR] ,index=['B','Rp','icorr_LPR'])
+        self.Icorr_LPR = self.B/self.Rp/self.area
+        LPR_series = pd.Series([self.B, self.Rp, self.Icorr_LPR] ,index=['B','Rp','Icorr_LPR'])
 
         if False:
             fig1,ax1 = plt.subplots(figsize=(8,6))
@@ -470,7 +470,7 @@ class Tafit:
             ax1.set_ylabel('E(V)')
             plt.show()
 
-        print 'Unit:V, Ohm, A/m^2'
+        print 'Unit:V, Ohm, A'
         print LPR_series
         self.result = taf_series.append(LPR_series)
         return self
