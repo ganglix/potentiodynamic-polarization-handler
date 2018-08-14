@@ -240,9 +240,11 @@ class Tafit:
             self.line_tan1.set_data([],[])
             self.line_tan2.set_data([],[])
 
-
-        plt.xlabel('I_select [A]')
-        plt.ylabel('E_select [V]')
+        if self.area == 1:
+            plt.xlabel('Current [A]')
+        else:
+            plt.xlabel('Current density, i $[A/m^2]$')
+        plt.ylabel('Potential, E [V]')
         plt.title(str(fname))
         plt.legend(loc='best')
 
@@ -420,8 +422,11 @@ class Tafit:
 #             self.line_tan2.set_data([],[])
 
 
-        plt.xlabel('I_select [A]')
-        plt.ylabel('E_select [V]')
+        if self.area == 1:
+            plt.xlabel('Current [A]')
+        else:
+            plt.xlabel('Current density, i $[A/m^2]$')
+        plt.ylabel('Potential, E [V]')
         plt.title(str(fname))
         plt.legend(loc='best')
 
