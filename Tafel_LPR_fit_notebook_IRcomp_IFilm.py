@@ -1,7 +1,8 @@
 # DOI 10.5281/zenodo.1342163
 # GNU General Public License 3.0
 # cite as
-# Li, Gang, & Li, Alice D.S. (2018, August 9). A customized Python module for interactive curve fitting on potentiodynamic scan data (Version v1.0.0). Zenodo. http://doi.org/10.5281/zenodo.1342163
+# Li, Gang, Evitts, Richard, Boulfiza, Moh, & Li, Alice D.S. (2018, August 11). A customized Python module for interactive curve fitting on potentiodynamic scan data (Version v1.0.1). Zenodo. http://doi.org/10.5281/zenodo.1343975
+
 
 
 import pandas as pd
