@@ -78,6 +78,8 @@ class Info:
         self.scantype = scantype
         self.area = area
 
+        df = None
+
         if use_pd_df:
             df = pd_dfIE.copy()
             df.columns = ["I", "E"]
@@ -697,7 +699,7 @@ class Tafit:
                 min=0,
                 max=0,
                 step=1,
-                value=[0, len(df_IE)],
+                value=[0, len(self.data)],
                 continuous_update=False,
                 layout=layout,
             ),
