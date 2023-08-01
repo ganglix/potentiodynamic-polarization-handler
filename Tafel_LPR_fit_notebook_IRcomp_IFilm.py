@@ -799,5 +799,5 @@ def plot_compare(
 
 
 # developer
-def Check_validation():
+def check_validation():
     pass
