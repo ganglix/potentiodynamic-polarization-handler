@@ -176,7 +176,7 @@ class Tafit:
         self.ax = self.fig.add_subplot(1, 1, 1)
         # plot empty data, create line objects
         (self.line_data_sel,) = self.ax.plot(
-            [], [], "C0.", markersize=3, label="selceted data"
+            [], [], "C0.", markersize=3, label="selected data"
         )
         (self.line__data_dis1,) = self.ax.plot(
             [], [], "C1.", markersize=3, label="disgarded data"
@@ -273,7 +273,7 @@ class Tafit:
         _ = np.linspace(E.min(), E.max(), 1000)  # spaced temporary E for plotting
 
         if logx:
-            self.line_data_sel.set_data(np.abs(I_select), E_select)  # selceted data
+            self.line_data_sel.set_data(np.abs(I_select), E_select)  # selected data
             self.line__data_dis1.set_data(
                 np.abs(I[0:start]), E[0:start]
             )  # disgarded data
@@ -292,7 +292,7 @@ class Tafit:
             self.line_tan2.set_data(self.Icorr * 10 ** ((_ - self.Ecorr) / self.Bc), _)
 
         else:
-            self.line_data_sel.set_data((I_select), E_select)  # selceted data
+            self.line_data_sel.set_data((I_select), E_select)  # selected data
             self.line__data_dis1.set_data((I[0:start]), E[0:start])  # disgarded data
             self.line__data_dis2.set_data((I[stop:-1]), E[stop:-1])  # disgarded data
             self.line_guess.set_data(
@@ -522,7 +522,7 @@ class Tafit:
         _ = np.linspace(E.min(), E.max(), 1000)  # spaced temporary E for plotting
 
         if logx:
-            self.line_data_sel.set_data(np.abs(I_select), E_select)  # selceted data
+            self.line_data_sel.set_data(np.abs(I_select), E_select)  # selected data
             self.line__data_dis1.set_data(
                 np.abs(I[0:start]), E[0:start]
             )  # disgarded data
@@ -540,7 +540,7 @@ class Tafit:
         #             self.line_tan2.set_data(self.Icorr*10**((_-self.Ecorr)/self.Bc),_)
 
         else:
-            self.line_data_sel.set_data((I_select), E_select)  # selceted data
+            self.line_data_sel.set_data((I_select), E_select)  # selected data
             self.line__data_dis1.set_data((I[0:start]), E[0:start])  # disgarded data
             self.line__data_dis2.set_data((I[stop:-1]), E[stop:-1])  # disgarded data
             self.line_guess.set_data((BVFeq(_, *p_guess)), _)  # Initial Guess
