@@ -128,7 +128,7 @@ class Info:
                     df[["Ec", "Ic"]].sort_index(ascending=False).reset_index(drop=True)
                 )
                 df_IE = pd.DataFrame(
-                    {"I": df_rev.Ic.append(df.Ia), "E": df_rev.Ec.append(df.Ea)}
+                    {"I": pd.concat([df_rev.Ic, df.Ia]), "E": pd.concat([df_rev.Ec, df.Ea])}
                 ).reset_index(drop=True)
                 df_IE["i_density"] = df_IE["I"] / self.area
                 df_IE["i_density_abs"] = df_IE.i_density.abs()
@@ -154,7 +154,7 @@ class Info:
 
 
 class Tafit:
-    """ datafiting object: Main object to store, process, fit, plot, data and results"""
+    """ data fiting object: Main object to store, process, fit, plot, data and results"""
 
     def __init__(self, info):
         # input attributes
@@ -366,7 +366,7 @@ class Tafit:
 
         print("Unit:V, Ohm, A")
         print(LPR_series)
-        self.result = taf_series.append(LPR_series)
+        self.result = pd.concat([taf_series, LPR_series])
         return self
 
     def BV_LPR_interact(self, anodic_range=0.15, cathodic_range=0.15):
