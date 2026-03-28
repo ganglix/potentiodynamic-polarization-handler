@@ -600,6 +600,13 @@ def main():
             st.divider()
             st.caption("**Icorr (LPR)** cross-check uses ±5–20 mV window around OCP.")
 
+    st.divider()
+    st.caption(
+        "Web app based on: Li, Gang, Evitts, Richard, Boulfiza, Moh, & Li, Alice D.S. (2018). "
+        "*A customized Python module for interactive curve fitting on potentiodynamic scan data* "
+        "(Version v1.0.1). Zenodo. https://doi.org/10.5281/zenodo.1343975"
+    )
+
 
 if __name__ == "__main__":
     main()
