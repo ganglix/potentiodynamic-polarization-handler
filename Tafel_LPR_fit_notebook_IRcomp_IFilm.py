@@ -61,7 +61,7 @@ def BVFeq(E, Eeq, i0, Ba, Bc, Va, Vc):
 class Info:
     """
     Info object: store and pre-process all raw current potential data and experiment settings
-    filename:.xlsx or .csv
+    filename:.xlsx, .csv, or .DTA (Gamry Instruments)
     scantype: 'one_step' or 'two_step', default is 'one step'
     """
 
@@ -77,6 +77,7 @@ class Info:
         self.filename = filename
         self.scantype = scantype
         self.area = area
+        self.dta_metadata = {}
 
         df = None
 
@@ -87,6 +88,14 @@ class Info:
             df["i_density_abs"] = df.i_density.abs()
             df.dropna(inplace=True)
             self.data = df
+
+        elif self.filename.split(".")[-1].upper() == "DTA":
+            from dta_parser import parse_dta
+            df_dta, self.dta_metadata = parse_dta(self.filename)
+            df_dta["i_density"] = df_dta["I"] / self.area
+            df_dta["i_density_abs"] = df_dta["I"].abs() / self.area
+            df_dta.dropna(inplace=True)
+            self.data = df_dta.reset_index(drop=True)
 
         else:
 
