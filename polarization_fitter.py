@@ -175,12 +175,13 @@ def fit_and_plot(
     logx: bool,
     auto_zoom: bool,
     grid_on: bool,
+    use_bvf: bool = False,
     title: str = "",
 ):
     """
-    Fit Butler-Volmer equation to the selected data range and return the
-    figure and a results dict.  Raises RuntimeError with a user-readable
-    message on failure.
+    Fit Butler-Volmer (and optionally BV+Film) equation to the selected data
+    range and return the figure and a results dict.  Raises RuntimeError with
+    a user-readable message on failure.
     """
     start, stop = data_range
     I_all = data["I"].values
@@ -221,6 +222,23 @@ def fit_and_plot(
     Ecorr, Icorr, Ba, Bc = popt
     B = Ba * abs(Bc) / (2.303 * (Ba + abs(Bc)))
 
+    # ── BVFeq fit (optional) ──────────────────────────────────────────────
+    popt_bvf = None
+    r2_bvf = None
+    if use_bvf:
+        Va_g, Vc_g = 1000.0, -1000.0
+        p0_bvf = [Ecorr, Icorr, Ba, Bc, Va_g, Vc_g]
+        bound_bvf = (
+            [OCP - 0.001, Icorr * 0.01, Ba - 0.20, Bc - 0.20, 1e-4, -1e6],
+            [OCP + 0.001, Icorr * 100.0, Ba + 0.20, Bc + 0.20, 1e6, -1e-4],
+        )
+        try:
+            popt_bvf, _ = curve_fit(BVFeq, E_sel, I_sel, p0_bvf,
+                                    bounds=bound_bvf, maxfev=20000)
+            r2_bvf = r2_score(I_sel, BVFeq(E_sel, *popt_bvf))
+        except RuntimeError:
+            popt_bvf = None  # BVFeq did not converge; fall back silently
+
     # LPR
     Rp = Icorr_LPR = None
     df_a = data[(data.E > OCP + 0.005) & (data.E < OCP + 0.020)]
@@ -251,6 +269,8 @@ def fit_and_plot(
         _plot_curve(np.abs(BVeq(E_line, *popt)), E_line, "-",  color="red",   lw=1.8,   label="BV fit")
         _plot_curve(Icorr * 10 ** ((E_line - Ecorr) / Ba), E_line, "--", color="red", alpha=0.4)
         _plot_curve(Icorr * 10 ** ((E_line - Ecorr) / Bc), E_line, "--", color="red", alpha=0.4)
+        if popt_bvf is not None:
+            _plot_curve(np.abs(BVFeq(E_line, *popt_bvf)), E_line, "-", color="C2", lw=1.8, label="BV+Film fit")
         if auto_zoom:
             ax.set_xlim(0.1 * I_sel_abs.min(), 10 * I_sel_abs.max())
     else:
@@ -260,6 +280,8 @@ def fit_and_plot(
         _plot_curve(I_sel,         E_sel,          color="C0", marker=".", ls="none", ms=2, label="selected")
         _plot_curve(BVeq(E_line, *p0),   E_line, "--", color="green", alpha=0.6, lw=1, label="initial guess")
         _plot_curve(BVeq(E_line, *popt), E_line, "-",  color="red",   lw=1.8,   label="BV fit")
+        if popt_bvf is not None:
+            _plot_curve(BVFeq(E_line, *popt_bvf), E_line, "-", color="C2", lw=1.8, label="BV+Film fit")
         if auto_zoom:
             ax.set_xlim(1.1 * I_sel.min(), 1.1 * I_sel.max())
 
@@ -284,6 +306,9 @@ def fit_and_plot(
         "Rp":         Rp,
         "Icorr_LPR":  Icorr_LPR,
         "R²":         r2,
+        "Va":         popt_bvf[4] if popt_bvf is not None else None,
+        "Vc":         popt_bvf[5] if popt_bvf is not None else None,
+        "R²_bvf":     r2_bvf,
         "range_low":  E_sel[0] - Ecorr,
         "range_high": E_sel[-1] - Ecorr,
     }
@@ -429,6 +454,7 @@ def main():
             data_range = (0, 1)
             taf_init = 200
             R = 0.0
+            use_bvf = False
             auto_zoom = True
             grid_on = True
             logx = True
@@ -468,6 +494,8 @@ def main():
                 help="Post-hoc IR compensation: E_corrected = E − I·R.",
             )
             st.divider()
+            use_bvf   = st.checkbox("BV + Film model (BVFeq)", value=False,
+                                    help="Also fit the Butler-Volmer + Film growth/dissolution model.")
             auto_zoom = st.checkbox("Auto-zoom", value=True)
             grid_on   = st.checkbox("Grid",      value=True)
             logx      = st.checkbox("Log x-axis", value=True)
@@ -511,6 +539,7 @@ def main():
             logx=logx,
             auto_zoom=auto_zoom,
             grid_on=grid_on,
+            use_bvf=use_bvf,
             title=file_title,
         )
         fit_ok = True
@@ -559,9 +588,13 @@ def main():
                 "Rp":                  f"{result['Rp']:.10g} Ω" if result["Rp"] else "—",
                 "Icorr (LPR)":        (f"{result['Icorr_LPR']:.10g} A  ({result['Icorr_LPR']*1e6:.6g} µA)") if result["Icorr_LPR"] else "—",
                 "icorr density (LPR)": f"{icorr_lpr_density:.10g} A/cm²  ({icorr_lpr_density*1e6:.6g} µA/cm²)" if icorr_lpr_density else "—",
-                "R²":                  f"{result['R²']:.10g}",
+                "R²  (BV)":            f"{result['R²']:.10g}",
                 "Fit range":           f"{result['range_low']:+.6g} → {result['range_high']:+.6g} V vs Ecorr",
             }
+            if use_bvf:
+                rows["Va"]           = f"{result['Va']:.10g}" if result["Va"] is not None else "—"
+                rows["Vc"]           = f"{result['Vc']:.10g}" if result["Vc"] is not None else "—"
+                rows["R²  (BV+Film)"]= f"{result['R²_bvf']:.10g}" if result["R²_bvf"] is not None else "—"
             st.table(pd.DataFrame.from_dict(rows, orient="index", columns=["Value"]))
 
             st.divider()
