@@ -55,6 +55,8 @@ pip install numpy pandas matplotlib scipy scikit-learn ipywidgets streamlit open
 
 ## Streamlit App
 
+Hosted app: https://potentiodynamic-polarization-fitter.streamlit.app
+
 ```bash
 streamlit run polarization_fitter.py
 ```
