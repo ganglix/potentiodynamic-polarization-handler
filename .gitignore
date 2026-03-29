@@ -5,3 +5,4 @@ experimental
 __pycache__/dta_parser.cpython-311.pyc
 __pycache__/Tafel_LPR_fit_notebook_IRcomp_IFilm.cpython-311.pyc
 __pycache__/Tafel_LPR_fit_notebook_IRcomp_IFilm.cpython-311.pyc
+.pytest_cache
